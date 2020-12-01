@@ -1,0 +1,123 @@
+version: 2.1
+
+orbs:
+  aws-ecr: circleci/aws-ecr@6.14.0
+  aws-ecs: circleci/aws-ecs@1.4.0
+
+executors:
+  default:
+    working_directory: ~/rails # 自身のアプリディレクトリ名を設定
+    docker:
+      # circleciが用意しているrubyのdocker imageを使用
+      - image: circleci/ruby:2.6.3-stretch-node-browsers
+        environment:
+          - RAILS_ENV: 'test'
+      # circleciが用意しているpostgresのdocker imageを使用
+      - image: circleci/postgres:12.1
+
+jobs:
+  build-test:
+    executor: default
+    steps: # checkout: CI環境上(executors)の working_directory の値の場所にGitリポジトリをコピーする。(circleciがデフォルトで用意しているステップ)
+      - checkout
+      - restore_cache:
+          name: bundle installの結果をrestore
+          keys:
+            - v1-dependencies-{{ checksum "Gemfile.lock" }}
+            - v1-dependencies-
+      - run:
+          name: setup bundler
+          command:
+            gem install bundler
+      - run:
+          name: bundle installを実行
+          command: bundle install --jobs=4 --retry=3 --path vendor/bundle
+      - save_cache:
+          name: bundle installの結果をキャッシュ
+          paths:
+            - ./vendor/bundle
+          key: v1-dependencies-{{ checksum "Gemfile.lock" }}
+      - run:
+          name: データベースのmigrate
+          # CIの時はrails db:schema:loadを使う
+          command: |
+            bundle exec rails db:create RAILS_ENV=test
+            bundle exec rails db:schema:load RAILS_ENV=test
+      - run:
+          name: テストの実行
+          command: bundle exec rspec
+      - run:
+          name: rubocopを実行
+          command: bundle exec rubocop
+
+workflows:
+  version: 2
+  nginx_rails_workflows:
+    jobs:
+      - build-test
+          filters:
+            branches:
+              ignore: # master以外にpushされた時にtestを行う
+                - master
+      - aws-ecr/build-and-push-image: # 指定したDockerfileでイメージのビルドとECRへのプッシュ
+          name: 'build-nginx'
+          requires:
+            - build-test
+          filters:
+            branches: # masterブランチにpushがあった時のみ発火
+              only:
+                - master
+          account-url: AWS_ECR_ACCOUNT_URL
+          region: AWS_REGION
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          create-repo: true # Should the repo be created if it does not exist?
+          dockerfile: ./docker/nginx/Dockerfile.prod
+          repo: nginx # Name of an Amazon ECR repository
+          # CIRCLE_SHA1は、現在のビルドの前回のコミットの SHA1 ハッシュ。
+          tag: "${CIRCLE_SHA1}" # イメージのタグにコミットのハッシュ値付与
+
+      - aws-ecr/build-and-push-image: # ECRとECSに必要な設定
+          name: 'build-rails'
+          requires:
+            - build-nginx
+          filters:
+            branches: # masterブランチにpushがあった時のみ発火
+              only:
+                - master
+          account-url: AWS_ECR_ACCOUNT_URL
+          region: AWS_REGION
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          create-repo: true
+          dockerfile: ./docker/rails/Dockerfile.prod
+          repo: rails
+          tag: "${CIRCLE_SHA1}"
+
+      # Nginxのデプロイ
+      - aws-ecs/deploy-service-update: # タスク定義を新たなリビジョンで作成し、Fargateのサービスで指定しているタスク定義のリビジョンを最新のものに更新
+          name: 'deploy-nginx'
+          requires:
+            - build-rails
+          filters:
+            branches: # masterブランチにpushがあった時のみ発火
+              only:
+                - master
+          family: 'nginx-rails' # ECSのタスク定義名
+          cluster-name: '${ECS_ARN}'  #ECSのクラスターのARN
+          service-name: '${ECS_SERVICE_NAME}' #サービス名
+          container-image-name-updates: "container=nginx,tag=${CIRCLE_SHA1}" # タスク定義で設定しているイメージのURL(AWSアカウントID.dkr.ecr.ap-northeast-1.amazonaws.com/ECRのリポジトリ名:CIRCLE_SHA1で付与したタグ)を最新のものに更新している。
+
+      # Railsのデプロイ(一応railsからデプロイしている)
+      - aws-ecs/deploy-service-update: # タスク定義を新たなリビジョンで作成し、Fargateのサービスで指定しているタスク定義のリビジョンを最新のものに更新
+          name: 'deploy-rails'
+          requires:
+            - deploy-nginx
+          filters:
+            branches: # masterブランチにpushがあった時のみ発火
+              only:
+                - master
+          family: 'nginx-rails' # ECSのタスク定義名
+          cluster-name: '${ECS_ARN}'  #ECSのクラスターのARN
+          service-name: '${ECS_SERVICE_NAME}' #サービス名
+          container-image-name-updates: "container=rails,tag=${CIRCLE_SHA1}" # タスク定義で設定しているイメージのURL(AWSアカウントID.dkr.ecr.ap-northeast-1.amazonaws.com/ECRのリポジトリ名:CIRCLE_SHA1で付与したタグ)を最新のものに更新している。

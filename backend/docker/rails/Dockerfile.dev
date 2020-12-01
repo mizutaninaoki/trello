@@ -1,0 +1,22 @@
+FROM ruby:2.6.3
+ENV LANG C.UTF-8
+
+RUN apt-get update -qq && apt-get install -y nodejs vim curl postgresql-client
+
+# yarnのインストール
+# 公式のインストール方法を参考に安定版で最新のyarnをインストールする
+RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+RUN echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+RUN apt-get update && apt-get install yarn
+
+WORKDIR /app
+COPY Gemfile /app/Gemfile
+COPY Gemfile.lock /app/Gemfile.lock
+RUN bundle install -j4
+COPY . /app
+
+EXPOSE 3333
+
+COPY entrypoint.sh /usr/bin/
+RUN chmod +x /usr/bin/entrypoint.sh
+ENTRYPOINT ["entrypoint.sh"]

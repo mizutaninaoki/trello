@@ -1,0 +1,21 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  timeout: 5000
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV['DB_HOST'] %>
+  username: <%= ENV['DB_USER'] %>
+  password: <%= ENV['DB_PASSWORD'] %>
+  port: <%= ENV['DB_PORT'] || 5432 %>
+
+development:
+  <<: *default
+  database: <%= ENV['DB_NAME'] + '_development' %>
+
+test:
+  <<: *default
+  database: <%= ENV['DB_NAME'] || 'db' %> # CI環境ではhost: localhost（.circleci/config.ymlの設定に依存）となる、circle-ciにのみhostをlocalhostで登録しておく
+
+production:
+  <<: *default
+  database: <%= ENV['DB_NAME'] + '_production' %> # RDSのエンドポイント

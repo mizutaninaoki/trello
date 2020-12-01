@@ -1,0 +1,30 @@
+.v-application {
+  list-style:none !important;
+  font-family: "游ゴシック体", YuGothic, "游ゴシック Medium", "Yu Gothic Medium", "游ゴシック", "Yu Gothic",'ヒラギノ角ゴ ProN', "メイリオ", sans-serif !important;
+  background-color: #f3f4f5 !important;
+  color: #222222 !important;
+}
+
+a {
+  text-decoration: none;
+  &:hover {
+    cursor: pointer;
+  }
+}
+
+$material-light: (
+  'background': #fff
+);
+
+.custom-color {
+  color: #f38181;
+}
+
+.main-pink {
+  color: #f38181;
+}
+
+.background-main-pink {
+  background-color: #f38181;
+}
+
