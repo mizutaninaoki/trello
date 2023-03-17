@@ -87,9 +87,9 @@ const config = {
     // port: 80,
     // baseURL: 'http://localhost:3333/api/v1',
     // baseURL: 'http://localhost/api/v1',
-    // proxy: true,
+    proxy: true,
     // baseURL: process.env.NODE_ENV === "production" ? "https://backend.mizutaninaoki.com/api/v1" : "http://localhost/api/v1"
-    baseURL: process.env.NODE_ENV === "production" ? "https://backend.mizutaninaoki.com/api/v1" : "http://localhost/api/v1"
+    baseURL: process.env.NODE_ENV === "production" ? "https://backend.mizutaninaoki.com/api/v1" : "http://localhost:3333/api/v1"
     // baseURL: "https://mizutaninaoki.com/api/v1"
   },
   auth: {
